@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer } from "http";
 import { storage } from "./storage";
-import { insertFileSchema, MAX_FILE_SIZE, STORAGE_LIMIT } from "@shared/schema";
+import { MAX_FILE_SIZE, STORAGE_LIMIT } from "@shared/schema";
 
 export async function registerRoutes(app: Express) {
   app.get("/api/files", async (req, res) => {
