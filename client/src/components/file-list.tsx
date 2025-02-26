@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { File as FileIcon, Folder, Search, Trash2, Edit2 } from 'lucide-react';
-import { formatFileSize, getFileIcon } from '@/lib/file-utils';
+import { formatFileSize } from '@/lib/file-utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
@@ -14,6 +14,8 @@ import {
 } from '@/components/ui/dialog';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
+import { FilePreview } from './file-preview';
+import type { File } from '@shared/schema';
 
 interface FileListProps {
   parentId: number | null;
@@ -23,6 +25,7 @@ interface FileListProps {
 export function FileList({ parentId, onFolderClick }: FileListProps) {
   const [search, setSearch] = useState('');
   const [renameFile, setRenameFile] = useState<{ id: number, name: string } | null>(null);
+  const [previewFile, setPreviewFile] = useState<File | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -53,11 +56,19 @@ export function FileList({ parentId, onFolderClick }: FileListProps) {
     }
   });
 
+  const handleFileClick = (file: File) => {
+    if (file.isFolder) {
+      onFolderClick(file.id);
+    } else {
+      setPreviewFile(file);
+    }
+  };
+
   if (isLoading) {
     return <div className="flex justify-center p-8">Loading...</div>;
   }
 
-  const filteredFiles = files?.filter(f => 
+  const filteredFiles = files?.filter((f: File) => 
     f.name.toLowerCase().includes(search.toLowerCase())
   );
 
@@ -74,16 +85,20 @@ export function FileList({ parentId, onFolderClick }: FileListProps) {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredFiles?.map(file => (
-          <Card key={file.id} className="p-4 flex items-center gap-3">
+        {filteredFiles?.map((file: File) => (
+          <Card 
+            key={file.id} 
+            className="p-4 flex items-center gap-3 cursor-pointer hover:bg-accent/5"
+            onClick={() => handleFileClick(file)}
+          >
             {file.isFolder ? (
               <Folder className="h-8 w-8 text-blue-500" />
             ) : (
               <FileIcon className="h-8 w-8 text-gray-500" />
             )}
-            
+
             <div className="flex-1 min-w-0">
-              <p className="truncate font-medium" onClick={() => file.isFolder && onFolderClick(file.id)}>
+              <p className="truncate font-medium">
                 {file.name}
               </p>
               {!file.isFolder && (
@@ -93,7 +108,7 @@ export function FileList({ parentId, onFolderClick }: FileListProps) {
               )}
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex gap-2" onClick={e => e.stopPropagation()}>
               <Button
                 variant="ghost"
                 size="icon"
@@ -131,6 +146,11 @@ export function FileList({ parentId, onFolderClick }: FileListProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <FilePreview 
+        file={previewFile} 
+        onClose={() => setPreviewFile(null)} 
+      />
     </div>
   );
 }
