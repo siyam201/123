@@ -4,7 +4,17 @@ import { storage } from "./storage";
 import { insertFileSchema, MAX_FILE_SIZE, STORAGE_LIMIT } from "@shared/schema";
 
 export async function registerRoutes(app: Express) {
-  app.get("/api/files", async (req, res) => {
+  // Set up authentication
+  setupAuth(app);
+
+  function isAuthenticated(req: any, res: any, next: any) {
+    if (req.isAuthenticated()) {
+      return next();
+    }
+    res.status(401).json({ message: "Not authenticated" });
+  }
+
+  app.get("/api/files", isAuthenticated, async (req, res) => {
     const parentId = req.query.parentId ? Number(req.query.parentId) : null;
     const files = await storage.getFiles(parentId);
     res.json(files);
