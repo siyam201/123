@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { createServer } from "http";
 import { storage } from "./storage";
 import { insertFileSchema, MAX_FILE_SIZE, STORAGE_LIMIT } from "@shared/schema";
+import { setupAuth } from "./auth";
 
 export async function registerRoutes(app: Express) {
   // Set up authentication
