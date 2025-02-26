@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -12,11 +12,13 @@ export const files = pgTable("files", {
   content: text("content").notNull(), // base64 encoded content
   parentId: integer("parent_id"),
   isFolder: boolean("is_folder").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
 // Create the insert schema, omitting auto-generated fields
 export const insertFileSchema = createInsertSchema(files).omit({ 
-  id: true 
+  id: true,
+  createdAt: true
 });
 
 // Export types for TypeScript

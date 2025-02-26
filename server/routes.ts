@@ -42,11 +42,30 @@ export async function registerRoutes(app: Express) {
   });
 
   app.get("/api/files/search", async (req, res) => {
-    const query = req.query.q as string;
-    if (!query) return res.json([]);
-    
-    const files = await storage.searchFiles(query);
-    res.json(files);
+    try {
+      const searchParams = {
+        name: req.query.q as string,
+        type: req.query.type as string,
+        minSize: req.query.minSize ? Number(req.query.minSize) : undefined,
+        maxSize: req.query.maxSize ? Number(req.query.maxSize) : undefined,
+        startDate: req.query.startDate as string,
+        endDate: req.query.endDate as string
+      };
+
+      // Validate size parameters
+      if (searchParams.minSize && isNaN(searchParams.minSize)) {
+        return res.status(400).json({ message: "Invalid minSize parameter" });
+      }
+      if (searchParams.maxSize && isNaN(searchParams.maxSize)) {
+        return res.status(400).json({ message: "Invalid maxSize parameter" });
+      }
+
+      const files = await storage.searchFiles(searchParams);
+      res.json(files);
+    } catch (error) {
+      console.error("Search error:", error);
+      res.status(500).json({ message: "Error performing search" });
+    }
   });
 
   app.get("/api/storage", async (req, res) => {

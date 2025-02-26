@@ -3,6 +3,9 @@ import { files, type File, type InsertFile } from "@shared/schema";
 import postgres from 'postgres';
 import { eq, like } from 'drizzle-orm';
 import { sql } from 'drizzle-orm/sql';
+import fs from 'fs/promises';
+import path from 'path';
+import { createHash } from 'crypto';
 
 // Database connection with error handling
 let client: ReturnType<typeof postgres>;
@@ -21,6 +24,30 @@ try {
   throw error;
 }
 
+
+// Directory where files will be stored
+const STORAGE_DIR = path.join(process.cwd(), 'storage');
+const METADATA_FILE = path.join(STORAGE_DIR, 'metadata.json');
+
+// Ensure storage directory exists
+async function initStorage() {
+  try {
+    await fs.mkdir(STORAGE_DIR, { recursive: true });
+    // Initialize metadata file if it doesn't exist
+    try {
+      await fs.access(METADATA_FILE);
+    } catch {
+      await fs.writeFile(METADATA_FILE, JSON.stringify([]));
+    }
+  } catch (error) {
+    console.error("Failed to initialize storage:", error);
+    throw error;
+  }
+}
+
+// Initialize storage on startup
+initStorage();
+
 export interface IStorage {
   getFiles(parentId: number | null): Promise<File[]>;
   getFile(id: number): Promise<File | undefined>;
@@ -28,13 +55,34 @@ export interface IStorage {
   updateFile(id: number, updates: Partial<InsertFile>): Promise<File>;
   deleteFile(id: number): Promise<void>;
   getTotalSize(): Promise<number>;
-  searchFiles(query: string): Promise<File[]>;
+  searchFiles(query: {
+    name?: string,
+    type?: string,
+    minSize?: number,
+    maxSize?: number,
+    startDate?: string,
+    endDate?: string
+  }): Promise<File[]>;
 }
 
-export class PostgresStorage implements IStorage {
+export class FileStorage implements IStorage {
+  private async readMetadata(): Promise<File[]> {
+    const data = await fs.readFile(METADATA_FILE, 'utf-8');
+    return JSON.parse(data);
+  }
+
+  private async writeMetadata(metadata: File[]): Promise<void> {
+    await fs.writeFile(METADATA_FILE, JSON.stringify(metadata, null, 2));
+  }
+
+  private getFilePath(id: number): string {
+    return path.join(STORAGE_DIR, `${id}`);
+  }
+
   async getFiles(parentId: number | null): Promise<File[]> {
     try {
-      return await db.select().from(files).where(eq(files.parentId, parentId));
+      const metadata = await this.readMetadata();
+      return metadata.filter(file => file.parentId === parentId);
     } catch (error) {
       console.error("Error getting files:", error);
       throw error;
@@ -43,8 +91,13 @@ export class PostgresStorage implements IStorage {
 
   async getFile(id: number): Promise<File | undefined> {
     try {
-      const results = await db.select().from(files).where(eq(files.id, id));
-      return results[0];
+      const metadata = await this.readMetadata();
+      const file = metadata.find(f => f.id === id);
+      if (file && !file.isFolder) {
+        const content = await fs.readFile(this.getFilePath(id), 'utf-8');
+        return { ...file, content };
+      }
+      return file;
     } catch (error) {
       console.error("Error getting file:", error);
       throw error;
@@ -53,8 +106,25 @@ export class PostgresStorage implements IStorage {
 
   async createFile(insertFile: InsertFile): Promise<File> {
     try {
-      const result = await db.insert(files).values(insertFile).returning();
-      return result[0];
+      const metadata = await this.readMetadata();
+      const id = metadata.length > 0 ? Math.max(...metadata.map(f => f.id)) + 1 : 1;
+      const newFile: File = {
+        ...insertFile,
+        id,
+        createdAt: new Date()
+      };
+
+      if (!newFile.isFolder) {
+        await fs.writeFile(this.getFilePath(id), insertFile.content);
+        // Don't store content in metadata
+        const { content, ...metadataFile } = newFile;
+        metadata.push(metadataFile);
+      } else {
+        metadata.push(newFile);
+      }
+
+      await this.writeMetadata(metadata);
+      return newFile;
     } catch (error) {
       console.error("Error creating file:", error);
       throw error;
@@ -63,12 +133,19 @@ export class PostgresStorage implements IStorage {
 
   async updateFile(id: number, updates: Partial<InsertFile>): Promise<File> {
     try {
-      const result = await db
-        .update(files)
-        .set(updates)
-        .where(eq(files.id, id))
-        .returning();
-      return result[0];
+      const metadata = await this.readMetadata();
+      const index = metadata.findIndex(f => f.id === id);
+      if (index === -1) throw new Error("File not found");
+
+      const updatedFile = { ...metadata[index], ...updates };
+      metadata[index] = updatedFile;
+
+      if (!updatedFile.isFolder && updates.content) {
+        await fs.writeFile(this.getFilePath(id), updates.content);
+      }
+
+      await this.writeMetadata(metadata);
+      return updatedFile;
     } catch (error) {
       console.error("Error updating file:", error);
       throw error;
@@ -77,17 +154,25 @@ export class PostgresStorage implements IStorage {
 
   async deleteFile(id: number): Promise<void> {
     try {
-      const file = await this.getFile(id);
+      const metadata = await this.readMetadata();
+      const file = metadata.find(f => f.id === id);
       if (!file) return;
 
       if (file.isFolder) {
-        const children = await this.getFiles(id);
+        const children = metadata.filter(f => f.parentId === id);
         for (const child of children) {
           await this.deleteFile(child.id);
         }
+      } else {
+        try {
+          await fs.unlink(this.getFilePath(id));
+        } catch (error) {
+          console.warn(`Failed to delete file ${id}:`, error);
+        }
       }
 
-      await db.delete(files).where(eq(files.id, id));
+      const updatedMetadata = metadata.filter(f => f.id !== id);
+      await this.writeMetadata(updatedMetadata);
     } catch (error) {
       console.error("Error deleting file:", error);
       throw error;
@@ -96,24 +181,59 @@ export class PostgresStorage implements IStorage {
 
   async getTotalSize(): Promise<number> {
     try {
-      const result = await db
-        .select({ total: sql<number>`sum(size)` })
-        .from(files)
-        .where(eq(files.isFolder, false));
-
-      return result[0]?.total || 0;
+      const metadata = await this.readMetadata();
+      return metadata
+        .filter(file => !file.isFolder)
+        .reduce((acc, file) => acc + file.size, 0);
     } catch (error) {
       console.error("Error getting total size:", error);
       throw error;
     }
   }
 
-  async searchFiles(query: string): Promise<File[]> {
+  async searchFiles(query: {
+    name?: string,
+    type?: string,
+    minSize?: number,
+    maxSize?: number,
+    startDate?: string,
+    endDate?: string
+  }): Promise<File[]> {
     try {
-      return await db
-        .select()
-        .from(files)
-        .where(like(files.name, `%${query}%`));
+      const metadata = await this.readMetadata();
+      return metadata.filter(file => {
+        // Skip folders in search results
+        if (file.isFolder) return false;
+
+        // Name search (case insensitive)
+        if (query.name && !file.name.toLowerCase().includes(query.name.toLowerCase())) {
+          return false;
+        }
+
+        // File type search
+        if (query.type && !file.type.startsWith(query.type)) {
+          return false;
+        }
+
+        // Size range search
+        if (typeof query.minSize === 'number' && file.size < query.minSize) {
+          return false;
+        }
+        if (typeof query.maxSize === 'number' && file.size > query.maxSize) {
+          return false;
+        }
+
+        // Date range search
+        const fileDate = new Date(file.createdAt);
+        if (query.startDate && fileDate < new Date(query.startDate)) {
+          return false;
+        }
+        if (query.endDate && fileDate > new Date(query.endDate)) {
+          return false;
+        }
+
+        return true;
+      });
     } catch (error) {
       console.error("Error searching files:", error);
       throw error;
@@ -122,4 +242,4 @@ export class PostgresStorage implements IStorage {
 }
 
 // Export a singleton instance
-export const storage = new PostgresStorage();
+export const storage = new FileStorage();
