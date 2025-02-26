@@ -1,1 +1,22 @@
-[]
+[
+  {
+    "name": "ao.png",
+    "path": "/ao.png",
+    "size": 209091,
+    "type": "image/png",
+    "parentId": null,
+    "isFolder": false,
+    "id": 1,
+    "createdAt": "2025-02-26T09:52:25.667Z"
+  },
+  {
+    "name": "(20+) Facebook.mp4",
+    "path": "/(20+) Facebook.mp4",
+    "size": 8163016,
+    "type": "video/mp4",
+    "parentId": null,
+    "isFolder": false,
+    "id": 2,
+    "createdAt": "2025-02-26T09:53:59.611Z"
+  }
+]

@@ -19,6 +19,7 @@ export function FilePreview({ file, onClose }: FilePreviewProps) {
 
   const isImage = file.type.startsWith('image/');
   const isText = file.type.startsWith('text/');
+  const isVideo = file.type.startsWith('video/');
 
   const downloadFile = () => {
     // Create blob from base64 content
@@ -28,7 +29,7 @@ export function FilePreview({ file, onClose }: FilePreviewProps) {
       bytes[i] = binary.charCodeAt(i);
     }
     const blob = new Blob([bytes], { type: file.type });
-    
+
     // Create download link
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -65,12 +66,21 @@ export function FilePreview({ file, onClose }: FilePreviewProps) {
               className="max-h-[70vh] mx-auto"
             />
           )}
+          {isVideo && (
+            <video 
+              controls
+              className="max-h-[70vh] w-full"
+              src={file.content}
+            >
+              Your browser does not support the video tag.
+            </video>
+          )}
           {isText && (
             <pre className="whitespace-pre-wrap bg-muted p-4 rounded-lg overflow-auto max-h-[70vh]">
               {atob(file.content.split(',')[1])}
             </pre>
           )}
-          {!isImage && !isText && (
+          {!isImage && !isText && !isVideo && (
             <div className="text-center py-8">
               <p>Preview not available for this file type.</p>
               <Button onClick={downloadFile} className="mt-4">
