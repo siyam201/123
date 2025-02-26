@@ -10,6 +10,21 @@ export async function registerRoutes(app: Express) {
     res.json(files);
   });
 
+  // Add endpoint to get single file with content
+  app.get("/api/files/:id", async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const file = await storage.getFile(id);
+      if (!file) {
+        return res.status(404).json({ message: "File not found" });
+      }
+      res.json(file);
+    } catch (error) {
+      console.error("Error getting file:", error);
+      res.status(500).json({ message: "Failed to get file" });
+    }
+  });
+
   app.post("/api/files", async (req, res) => {
     const fileData = insertFileSchema.parse(req.body);
     

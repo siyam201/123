@@ -80,11 +80,23 @@ export function FileList({ parentId, onFolderClick }: FileListProps) {
     },
   });
 
-  const handleFileClick = (file: File) => {
+  const handleFileClick = async (file: File) => {
     if (file.isFolder) {
       onFolderClick(file.id);
     } else {
-      setPreviewFile(file);
+      try {
+        // Fetch full file content before preview
+        const res = await fetch(`/api/files/${file.id}`);
+        if (!res.ok) throw new Error('Failed to load file');
+        const fullFile = await res.json();
+        setPreviewFile(fullFile);
+      } catch (error) {
+        toast({ 
+          title: 'Error',
+          description: 'Failed to load file preview',
+          variant: 'destructive'
+        });
+      }
     }
   };
 
