@@ -20,5 +20,5 @@ export const insertFileSchema = createInsertSchema(files).omit({
 export type InsertFile = z.infer<typeof insertFileSchema>;
 export type File = typeof files.$inferSelect;
 
-export const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
-export const STORAGE_LIMIT = 500 * 1024 * 1024; // 500MB
+export const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
+export const STORAGE_LIMIT = 100 * 1024 * 1024 * 1024; // 100GB
