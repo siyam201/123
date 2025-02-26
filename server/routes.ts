@@ -2,20 +2,9 @@ import type { Express } from "express";
 import { createServer } from "http";
 import { storage } from "./storage";
 import { insertFileSchema, MAX_FILE_SIZE, STORAGE_LIMIT } from "@shared/schema";
-import { setupAuth } from "./auth";
 
 export async function registerRoutes(app: Express) {
-  // Set up authentication
-  setupAuth(app);
-
-  function isAuthenticated(req: any, res: any, next: any) {
-    if (req.isAuthenticated()) {
-      return next();
-    }
-    res.status(401).json({ message: "Not authenticated" });
-  }
-
-  app.get("/api/files", isAuthenticated, async (req, res) => {
+  app.get("/api/files", async (req, res) => {
     const parentId = req.query.parentId ? Number(req.query.parentId) : null;
     const files = await storage.getFiles(parentId);
     res.json(files);
@@ -74,14 +63,6 @@ export async function registerRoutes(app: Express) {
         startDate: req.query.startDate as string,
         endDate: req.query.endDate as string
       };
-
-      // Validate size parameters
-      if (searchParams.minSize && isNaN(searchParams.minSize)) {
-        return res.status(400).json({ message: "Invalid minSize parameter" });
-      }
-      if (searchParams.maxSize && isNaN(searchParams.maxSize)) {
-        return res.status(400).json({ message: "Invalid maxSize parameter" });
-      }
 
       const files = await storage.searchFiles(searchParams);
       res.json(files);

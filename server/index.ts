@@ -1,10 +1,10 @@
+
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { MAX_FILE_SIZE } from "@shared/schema";
 
 const app = express();
-// Increase body parser limits to handle large files
 app.use(express.json({ limit: '100gb' }));
 app.use(express.urlencoded({ extended: false, limit: '100gb' }));
 
