@@ -63,6 +63,16 @@ export interface IStorage {
     startDate?: string,
     endDate?: string
   }): Promise<File[]>;
+  createUser(userData: { username: string; password: string }): Promise<UserData>;
+  getUser(id: number): Promise<UserData | undefined>;
+  getUserByUsername(username: string): Promise<UserData | undefined>;
+}
+
+interface UserData {
+  id: number;
+  username: string;
+  password: string;
+  createdAt: Date;
 }
 
 export class FileStorage implements IStorage {
@@ -236,6 +246,70 @@ export class FileStorage implements IStorage {
       });
     } catch (error) {
       console.error("Error searching files:", error);
+      throw error;
+    }
+  }
+
+  private async readUsers(): Promise<UserData[]> {
+    try {
+      const usersFile = path.join(STORAGE_DIR, 'users.json');
+      try {
+        await fs.access(usersFile);
+      } catch {
+        await fs.writeFile(usersFile, JSON.stringify([]));
+      }
+      const data = await fs.readFile(usersFile, 'utf-8');
+      return JSON.parse(data);
+    } catch (error) {
+      console.error("Error reading users:", error);
+      throw error;
+    }
+  }
+
+  private async writeUsers(users: UserData[]): Promise<void> {
+    try {
+      const usersFile = path.join(STORAGE_DIR, 'users.json');
+      await fs.writeFile(usersFile, JSON.stringify(users, null, 2));
+    } catch (error) {
+      console.error("Error writing users:", error);
+      throw error;
+    }
+  }
+
+  async createUser(userData: { username: string; password: string }): Promise<UserData> {
+    try {
+      const users = await this.readUsers();
+      const id = users.length > 0 ? Math.max(...users.map(u => u.id)) + 1 : 1;
+      const newUser = {
+        ...userData,
+        id,
+        createdAt: new Date()
+      };
+      users.push(newUser);
+      await this.writeUsers(users);
+      return newUser;
+    } catch (error) {
+      console.error("Error creating user:", error);
+      throw error;
+    }
+  }
+
+  async getUser(id: number): Promise<UserData | undefined> {
+    try {
+      const users = await this.readUsers();
+      return users.find(u => u.id === id);
+    } catch (error) {
+      console.error("Error getting user:", error);
+      throw error;
+    }
+  }
+
+  async getUserByUsername(username: string): Promise<UserData | undefined> {
+    try {
+      const users = await this.readUsers();
+      return users.find(u => u.username === username);
+    } catch (error) {
+      console.error("Error getting user by username:", error);
       throw error;
     }
   }
