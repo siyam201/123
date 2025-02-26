@@ -4,8 +4,9 @@ import { setupVite, serveStatic, log } from "./vite";
 import { MAX_FILE_SIZE } from "@shared/schema";
 
 const app = express();
-app.use(express.json({ limit: '100mb' }));
-app.use(express.urlencoded({ extended: false, limit: '100mb' }));
+// Increase body parser limits to handle large files
+app.use(express.json({ limit: '100gb' }));
+app.use(express.urlencoded({ extended: false, limit: '100gb' }));
 
 app.use((req, res, next) => {
   const start = Date.now();
